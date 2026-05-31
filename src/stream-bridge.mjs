@@ -41,6 +41,14 @@ async function emitToolStart(state, callbacks, { callId, name, args }) {
   state.itemLifecycle.startedCount += 1;
   state.itemLifecycle.activeCount += 1;
 
+  if (callbacks.onExecutionPhase) {
+    await callbacks.onExecutionPhase({
+      phase: "tool_execution_started",
+      tool: name,
+      toolCallId: callId,
+    });
+  }
+
   const detailMode = callbacks.toolProgressDetail ?? "explain";
   const meta = inferToolMetaFromArgs(name, args, { detailMode });
   state.toolMetaById.set(callId, { toolName: name, meta });
@@ -152,6 +160,15 @@ export async function bridgeSdkStreamEvent(event, state, callbacks) {
       if (!delta) {
         return state;
       }
+      if (!state.assistantStarted) {
+        state.assistantStarted = true;
+        if (callbacks.onAssistantMessageStart) {
+          await callbacks.onAssistantMessageStart();
+        }
+        if (callbacks.onExecutionPhase) {
+          await callbacks.onExecutionPhase({ phase: "assistant_output_started" });
+        }
+      }
       state.assistantText += delta;
       if (callbacks.onPartialReply) {
         await callbacks.onPartialReply({ text: state.assistantText, delta });
@@ -187,6 +204,7 @@ export function createStreamState() {
       completedCount: 0,
       activeCount: 0,
     },
+    assistantStarted: false,
   };
 }
 

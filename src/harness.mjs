@@ -218,8 +218,16 @@ export function createCursorSdkHarness(pluginConfig = {}) {
           onPartialReply: params.onPartialReply,
           onReasoningStream: params.onReasoningStream,
           onReasoningEnd: params.onReasoningEnd,
+          onAssistantMessageStart: params.onAssistantMessageStart,
           onAgentEvent: params.onAgentEvent,
           toolProgressDetail: params.toolProgressDetail,
+          onExecutionPhase: (info) =>
+            params.onExecutionPhase?.({
+              provider: params.provider,
+              model: params.modelId,
+              backend: HARNESS_ID,
+              ...info,
+            }),
         });
 
         const result = await run.wait();

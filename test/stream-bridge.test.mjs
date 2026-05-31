@@ -109,3 +109,37 @@ test("duplicate running events are ignored", async () => {
   assert.equal(count, 1);
   assert.equal(state.itemLifecycle.startedCount, 1);
 });
+
+test("assistant text emits onAssistantMessageStart once", async () => {
+  // Arrange
+  const state = createStreamState();
+  let starts = 0;
+  const callbacks = {
+    onAssistantMessageStart: async () => {
+      starts += 1;
+    },
+    onPartialReply: async () => {},
+  };
+
+  // Act
+  await bridgeSdkStreamEvent(
+    {
+      type: "assistant",
+      message: { content: [{ type: "text", text: "Hello" }] },
+    },
+    state,
+    callbacks,
+  );
+  await bridgeSdkStreamEvent(
+    {
+      type: "assistant",
+      message: { content: [{ type: "text", text: " world" }] },
+    },
+    state,
+    callbacks,
+  );
+
+  // Assert
+  assert.equal(starts, 1);
+  assert.equal(state.assistantText, "Hello world");
+});
