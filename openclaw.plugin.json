@@ -11,8 +11,14 @@
     "modelPrefixes": ["cursor-sdk/"]
   },
   "agentHarnesses": ["cursor-sdk"],
-  "providerAuthEnvVars": {
-    "cursor-sdk": ["CURSOR_API_KEY"]
+  "setup": {
+    "providers": [
+      {
+        "id": "cursor-sdk",
+        "authMethods": ["api-key"],
+        "envVars": ["CURSOR_API_KEY"]
+      }
+    ]
   },
   "providerAuthChoices": [
     {
