@@ -1,0 +1,63 @@
+{
+  "name": "openclaw-cursor-sdk",
+  "version": "0.0.1",
+  "description": "OpenClaw plugin: agent harness over the Cursor SDK (@cursor/sdk) with thinking and tool progress streaming.",
+  "type": "module",
+  "main": "./index.js",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daswass/openclaw-cursor-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/daswass/openclaw-cursor-sdk/issues"
+  },
+  "homepage": "https://github.com/daswass/openclaw-cursor-sdk#readme",
+  "keywords": [
+    "openclaw",
+    "openclaw-plugin",
+    "cursor",
+    "cursor-sdk",
+    "agent-harness",
+    "ai",
+    "llm"
+  ],
+  "files": [
+    "index.js",
+    "openclaw.plugin.json",
+    "src/",
+    "scripts/",
+    "docs/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "spike": "node scripts/spike-stream.mjs",
+    "models": "node scripts/list-models.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@cursor/sdk": "1.0.17"
+  },
+  "devDependencies": {
+    "openclaw": "2026.5.12"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.js"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.5.7"
+    },
+    "build": {
+      "openclawVersion": "2026.5.12"
+    },
+    "release": {
+      "publishToClawHub": false,
+      "publishToNpm": false
+    }
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

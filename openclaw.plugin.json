@@ -1,0 +1,44 @@
+{
+  "id": "cursor-sdk",
+  "name": "Cursor SDK",
+  "description": "Run OpenClaw agent turns through the local Cursor SDK (@cursor/sdk) with native thinking stream support.",
+  "activation": {
+    "onStartup": true
+  },
+  "enabledByDefault": false,
+  "providers": ["cursor-sdk"],
+  "modelSupport": {
+    "modelPrefixes": ["cursor-sdk/"]
+  },
+  "agentHarnesses": ["cursor-sdk"],
+  "providerAuthEnvVars": {
+    "cursor-sdk": ["CURSOR_API_KEY"]
+  },
+  "providerAuthChoices": [
+    {
+      "provider": "cursor-sdk",
+      "method": "api-key",
+      "choiceId": "cursor-sdk",
+      "choiceLabel": "Cursor API key",
+      "choiceHint": "Set CURSOR_API_KEY (Cursor dashboard). Used by @cursor/sdk local runtime.",
+      "assistantPriority": 0,
+      "groupId": "cursor-sdk",
+      "groupLabel": "Cursor",
+      "groupHint": "Cursor subscription via Cursor SDK"
+    }
+  ],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "cwd": {
+        "type": "string",
+        "description": "Default working directory for local SDK agents. Defaults to the OpenClaw agent workspace when omitted."
+      },
+      "defaultModel": {
+        "type": "string",
+        "description": "Fallback Cursor model id when the resolved OpenClaw model id is unavailable (default: composer-2.5)."
+      }
+    }
+  }
+}
