@@ -34,6 +34,7 @@
   "scripts": {
     "spike": "node scripts/spike-stream.mjs",
     "models": "node scripts/list-models.mjs",
+    "refresh-models": "node scripts/refresh-models.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
@@ -53,7 +54,7 @@
       "openclawVersion": "2026.5.12"
     },
     "release": {
-      "publishToClawHub": false,
+      "publishToClawHub": true,
       "publishToNpm": false
     }
   },

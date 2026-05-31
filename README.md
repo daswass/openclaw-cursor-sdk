@@ -27,6 +27,15 @@ See [docs/ADR-001-repo-and-architecture.md](./docs/ADR-001-repo-and-architecture
 
 ## Install
 
+### From ClawHub (recommended when published)
+
+```bash
+openclaw plugins install clawhub:@daswass/openclaw-cursor-sdk
+openclaw plugins doctor
+```
+
+### From git
+
 From a git checkout:
 
 ```bash
@@ -114,6 +123,21 @@ Optional plugin config:
 | `npm test` | Stream bridge unit tests |
 | `npm run spike` | SDK stream smoke test (thinking, assistant, tool_call) |
 | `npm run models -- <filter>` | List models from `Cursor.models.list()` |
+| `npm run refresh-models` | Print the provider catalog (live when `CURSOR_API_KEY` is set) |
+
+## Known issues
+
+See [docs/KNOWN_ISSUES.md](./docs/KNOWN_ISSUES.md) — notably Telegram tool-progress preview cleanup (needs upstream OpenClaw fix).
+
+## Publishing to ClawHub
+
+```bash
+npm install
+npm test
+clawhub publish   # requires ClawHub auth; package.json has publishToClawHub: true
+```
+
+After publish, install with `openclaw plugins install clawhub:@daswass/openclaw-cursor-sdk`.
 
 ## Coexistence with cursor-cli
 

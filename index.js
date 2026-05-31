@@ -1,24 +1,8 @@
 import { definePluginEntry } from "openclaw/plugin-sdk/core";
 import { createCursorSdkHarness } from "./src/harness.mjs";
+import { listCursorSdkCatalogModels } from "./src/catalog.mjs";
 
 const PROVIDER_ID = "cursor-sdk";
-
-const DEFAULT_MODELS = [
-  {
-    id: "composer-2.5",
-    name: "Composer 2.5",
-    reasoning: true,
-    contextWindow: 200000,
-    maxTokens: 32768,
-  },
-  {
-    id: "auto",
-    name: "Auto",
-    reasoning: false,
-    contextWindow: 1048576,
-    maxTokens: 131072,
-  },
-];
 
 export default definePluginEntry({
   id: "cursor-sdk",
@@ -41,17 +25,7 @@ export default definePluginEntry({
         docsPath: "/providers/cursor-sdk",
         catalog: {
           order: "simple",
-          run: async () =>
-            DEFAULT_MODELS.map((model) => ({
-              id: model.id,
-              name: model.name,
-              provider: PROVIDER_ID,
-              reasoning: model.reasoning,
-              input: ["text"],
-              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-              contextWindow: model.contextWindow,
-              maxTokens: model.maxTokens,
-            })),
+          run: async () => listCursorSdkCatalogModels(),
         },
         resolveDynamicModel: (ctx) => ({
           id: ctx.modelId,
