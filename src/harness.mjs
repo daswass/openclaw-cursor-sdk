@@ -215,6 +215,7 @@ export function createCursorSdkHarness(pluginConfig = {}) {
           onAssistantMessageStart: params.onAssistantMessageStart,
           onAgentEvent: params.onAgentEvent,
           toolProgressDetail: params.toolProgressDetail,
+          streamThinkingToChannels: pluginConfig.streamThinkingToChannels === true,
           onExecutionPhase: (info) =>
             params.onExecutionPhase?.({
               provider: params.provider,

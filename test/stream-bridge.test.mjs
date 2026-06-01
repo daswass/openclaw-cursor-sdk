@@ -150,6 +150,29 @@ test("assistant tool_use blocks emit tool start", async () => {
   assert.equal(events[1].stream, "item");
 });
 
+test("thinking is suppressed unless streamThinkingToChannels is true", async () => {
+  // Arrange
+  const state = createStreamState();
+  let reasoningCalls = 0;
+  const callbacks = {
+    streamThinkingToChannels: false,
+    onReasoningStream: async () => {
+      reasoningCalls += 1;
+    },
+  };
+
+  // Act
+  await bridgeSdkStreamEvent(
+    { type: "thinking", text: "internal reasoning" },
+    state,
+    callbacks,
+  );
+
+  // Assert
+  assert.equal(reasoningCalls, 0);
+  assert.equal(state.reasoningText, "internal reasoning");
+});
+
 test("assistant text emits onAssistantMessageStart once", async () => {
   // Arrange
   const state = createStreamState();

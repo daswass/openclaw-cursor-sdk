@@ -1,11 +1,11 @@
 # openclaw-cursor-sdk
 
-OpenClaw plugin that runs agent turns through the **Cursor SDK** (`@cursor/sdk`) using a **Codex-style agent harness**. Streams native thinking events and tool progress to OpenClaw channels (for example Telegram live previews).
+OpenClaw plugin that runs agent turns through the **Cursor SDK** (`@cursor/sdk`) using a **Codex-style agent harness**. Streams tool progress to OpenClaw channels (for example Telegram live previews). SDK thinking is kept internal by default (Codex-like UX).
 
 ## Features
 
 - **Agent harness** — `registerAgentHarness` integration with session resume via `Agent.resume`
-- **Thinking stream** — maps `SDKThinkingMessage` to `onReasoningStream`
+- **Thinking stream** — optional; maps `SDKThinkingMessage` to `onReasoningStream` when `streamThinkingToChannels: true`
 - **Tool progress** — maps `tool_call` events to OpenClaw `stream: "tool"` for channel progress lines
 - **Provider** — registers `cursor-sdk/*` model refs
 
@@ -59,7 +59,7 @@ Enable the plugin and wire model refs with the SDK harness runtime:
   },
   agents: {
     defaults: {
-      reasoningDefault: "stream",
+      reasoningDefault: "off",
       model: {
         primary: "cursor-sdk/composer-2.5"
       },
@@ -80,15 +80,19 @@ Enable the plugin and wire model refs with the SDK harness runtime:
 
 Set `CURSOR_API_KEY` in your environment or through OpenClaw provider auth.
 
-### Telegram live previews
+### Telegram live previews (Codex-like)
 
-| `/reasoning` mode | Thinking | Tool progress lines |
-|-------------------|----------|---------------------|
-| `stream` | Live reasoning draft | Live answer-preview lines (Cursor SDK tools: read, grep, shell, …) |
-| `on` | Included in final answer | **No** live tool progress (answer draft lane disabled) |
-| `off` | Hidden | No live tool progress |
+Codex shows **tool progress** on the answer draft lane, not thinking text. Match that UX:
 
-Use **`/reasoning stream`** with `channels.telegram.streaming.mode: partial` for Codex-style live previews. Tool progress shows **Cursor SDK native tools only**, not OpenClaw plugin tools (Trello, skills, etc.).
+| Setting | Thinking in Telegram | Tool progress lines |
+|---------|----------------------|---------------------|
+| **`/reasoning off`** (recommended) | Hidden | Live (read, grep, shell, …) |
+| `/reasoning stream` + plugin `streamThinkingToChannels: true` | Live reasoning draft | Live |
+| `/reasoning on` | In final answer only | **Disabled** (answer draft lane off) |
+
+Default plugin config keeps SDK thinking **off channels** (`streamThinkingToChannels: false`). Set `agents.defaults.reasoningDefault: "off"` and use `/reasoning off` in Telegram.
+
+Tool progress shows **Cursor SDK native tools only**, not OpenClaw plugin tools (Trello, skills, etc.).
 
 ## Development
 
@@ -116,6 +120,7 @@ Optional plugin config:
 |-----|-------------|
 | `cwd` | Default working directory for local SDK agents (defaults to agent workspace) |
 | `defaultModel` | Fallback model id when none is resolved (default: `composer-2.5`) |
+| `streamThinkingToChannels` | Forward SDK `thinking` events to Telegram reasoning drafts (default: `false`) |
 
 ## Scripts
 

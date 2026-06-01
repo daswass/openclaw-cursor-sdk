@@ -207,7 +207,7 @@ export async function bridgeSdkStreamEvent(event, state, callbacks) {
         return state;
       }
       state.reasoningText += delta;
-      if (callbacks.onReasoningStream) {
+      if (callbacks.streamThinkingToChannels && callbacks.onReasoningStream) {
         await callbacks.onReasoningStream({ text: state.reasoningText });
       }
       return state;
@@ -289,7 +289,7 @@ export async function drainSdkStream(stream, callbacks) {
   for await (const event of stream) {
     await bridgeSdkStreamEvent(event, state, callbacks);
   }
-  if (callbacks.onReasoningEnd && state.reasoningText) {
+  if (callbacks.streamThinkingToChannels && callbacks.onReasoningEnd && state.reasoningText) {
     await callbacks.onReasoningEnd();
   }
   return state;

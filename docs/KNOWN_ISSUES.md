@@ -6,7 +6,7 @@
 
 **Checklist:**
 
-1. **`/reasoning stream` required** — `/reasoning on` disables the answer draft lane, which also disables live tool progress. Use `/reasoning stream` (matches `agents.defaults.reasoningDefault: stream`).
+1. **`/reasoning off` recommended** — Codex-like UX: tool progress on the answer lane, no thinking noise. `/reasoning on` disables tool previews; `/reasoning stream` shows thinking drafts (only if plugin `streamThinkingToChannels: true`).
 2. **SDK-native tools only** — Tool progress shows Cursor SDK tools (`read`, `grep`, `shell`, …), **not** OpenClaw plugin tools (Trello, skills, exec approvals). Those run outside the SDK harness.
 3. **Prompt must invoke SDK tools** — Try: `Read TOOLS.md and reply with the first heading only.`
 4. **Restart gateway** after plugin changes (`plugins.load.paths` loads the local clone).

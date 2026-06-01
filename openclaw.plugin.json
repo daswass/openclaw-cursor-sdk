@@ -44,6 +44,10 @@
       "defaultModel": {
         "type": "string",
         "description": "Fallback Cursor model id when the resolved OpenClaw model id is unavailable (default: composer-2.5)."
+      },
+      "streamThinkingToChannels": {
+        "type": "boolean",
+        "description": "When true, forward SDK thinking events to onReasoningStream (Telegram reasoning drafts). Default false for Codex-like tool-only progress UX."
       }
     }
   }
