@@ -130,6 +130,9 @@ Optional plugin config:
 | `npm run spike` | SDK stream smoke test (thinking, assistant, tool_call) |
 | `npm run models -- <filter>` | List models from `Cursor.models.list()` |
 | `npm run refresh-models` | Print the provider catalog (live when `CURSOR_API_KEY` is set) |
+| `npm run cleanup-sessions` | Dry-run orphan/stale session bindings (add `-- --apply` to delete) |
+
+Session retention policy: [docs/SESSION_RETENTION.md](./docs/SESSION_RETENTION.md).
 
 ## Known issues
 

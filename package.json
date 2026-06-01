@@ -35,6 +35,7 @@
     "spike": "node scripts/spike-stream.mjs",
     "models": "node scripts/list-models.mjs",
     "refresh-models": "node scripts/refresh-models.mjs",
+    "cleanup-sessions": "node scripts/cleanup-sessions.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
