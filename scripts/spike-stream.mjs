@@ -65,6 +65,10 @@ async function main() {
           if (block?.type === "text" && block.text) {
             assistantChars += block.text.length;
             process.stdout.write(block.text);
+          } else if (block?.type === "tool_use") {
+            console.error(
+              `\n[tool_use] ${block.name} id=${block.id}`,
+            );
           }
         }
       } else if (event.type === "tool_call") {

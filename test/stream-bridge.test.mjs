@@ -84,13 +84,13 @@ test("tool_call completed emits result and records tool meta", async () => {
   assert.equal(state.hadPotentialSideEffects, true);
 });
 
-test("duplicate running events are ignored", async () => {
+test("duplicate running events emit update", async () => {
   // Arrange
   const state = createStreamState();
-  let count = 0;
+  const events = [];
   const callbacks = {
-    onAgentEvent: async () => {
-      count += 1;
+    onAgentEvent: async (evt) => {
+      events.push(evt);
     },
   };
   const running = {
@@ -103,11 +103,50 @@ test("duplicate running events are ignored", async () => {
 
   // Act
   await bridgeSdkStreamEvent(running, state, callbacks);
-  await bridgeSdkStreamEvent(running, state, callbacks);
+  await bridgeSdkStreamEvent(
+    {
+      ...running,
+      args: { pattern: "bar" },
+    },
+    state,
+    callbacks,
+  );
 
   // Assert
-  assert.equal(count, 1);
+  assert.equal(events.length, 2);
+  assert.equal(events[0].data.phase, "start");
+  assert.equal(events[1].data.phase, "update");
   assert.equal(state.itemLifecycle.startedCount, 1);
+});
+
+test("assistant tool_use blocks emit tool start", async () => {
+  // Arrange
+  const state = createStreamState();
+  const events = [];
+  const callbacks = {
+    onAgentEvent: async (evt) => {
+      events.push(evt);
+    },
+  };
+
+  // Act
+  await bridgeSdkStreamEvent(
+    {
+      type: "assistant",
+      message: {
+        content: [{ type: "tool_use", id: "call-4", name: "read", input: { path: "README.md" } }],
+      },
+    },
+    state,
+    callbacks,
+  );
+
+  // Assert
+  assert.equal(events.length, 1);
+  assert.equal(events[0].stream, "tool");
+  assert.equal(events[0].data.phase, "start");
+  assert.equal(events[0].data.name, "read");
+  assert.equal(events[0].data.toolCallId, "call-4");
 });
 
 test("assistant text emits onAssistantMessageStart once", async () => {

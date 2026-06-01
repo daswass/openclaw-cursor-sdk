@@ -32,8 +32,26 @@ async function emitToolAgentEvent(callbacks, payload) {
   }
 }
 
+async function emitToolUpdate(state, callbacks, { callId, name, args }) {
+  const detailMode = callbacks.toolProgressDetail ?? "explain";
+  const meta = inferToolMetaFromArgs(name, args, { detailMode });
+  state.toolMetaById.set(callId, { toolName: name, meta });
+
+  await emitToolAgentEvent(callbacks, {
+    stream: "tool",
+    data: {
+      phase: "update",
+      name,
+      toolCallId: callId,
+      ...(args !== undefined ? { args } : {}),
+      ...(meta ? { meta } : {}),
+    },
+  });
+}
+
 async function emitToolStart(state, callbacks, { callId, name, args }) {
   if (state.startedToolCallIds.has(callId)) {
+    await emitToolUpdate(state, callbacks, { callId, name, args });
     return;
   }
 
@@ -155,6 +173,16 @@ export async function bridgeSdkStreamEvent(event, state, callbacks) {
       for (const block of blocks) {
         if (block?.type === "text" && typeof block.text === "string") {
           delta += block.text;
+        } else if (block?.type === "tool_use") {
+          const callId = block.id;
+          const name = normalizeToolName(block.name);
+          if (callId && name) {
+            await emitToolStart(state, callbacks, {
+              callId,
+              name,
+              args: block.input,
+            });
+          }
         }
       }
       if (!delta) {
