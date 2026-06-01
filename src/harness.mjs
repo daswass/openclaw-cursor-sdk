@@ -207,12 +207,6 @@ export function createCursorSdkHarness(pluginConfig = {}) {
         });
 
         const run = await sendPrompt(agent, params.prompt);
-        params.onExecutionPhase?.({
-          phase: "assistant_output_started",
-          provider: params.provider,
-          model: params.modelId,
-          backend: HARNESS_ID,
-        });
 
         const state = await drainSdkStream(run.stream(), {
           onPartialReply: params.onPartialReply,

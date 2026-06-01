@@ -54,7 +54,7 @@
       "openclawVersion": "2026.5.12"
     },
     "release": {
-      "publishToClawHub": true,
+      "publishToClawHub": false,
       "publishToNpm": false
     }
   },

@@ -27,15 +27,6 @@ See [docs/ADR-001-repo-and-architecture.md](./docs/ADR-001-repo-and-architecture
 
 ## Install
 
-### From ClawHub (recommended when published)
-
-```bash
-openclaw plugins install clawhub:@daswass/openclaw-cursor-sdk
-openclaw plugins doctor
-```
-
-### From git
-
 From a git checkout:
 
 ```bash
@@ -46,11 +37,13 @@ openclaw plugins install .
 openclaw plugins doctor
 ```
 
-Or install directly:
+Or install directly from GitHub:
 
 ```bash
 openclaw plugins install https://github.com/daswass/openclaw-cursor-sdk.git
 ```
+
+For local development, add the checkout to `plugins.load.paths` in `openclaw.json` and restart the gateway after plugin changes.
 
 ## Configuration
 
@@ -85,9 +78,17 @@ Enable the plugin and wire model refs with the SDK harness runtime:
 }
 ```
 
-Set `CURSOR_API_KEY` in your environment or through OpenClaw provider auth. Restart the gateway after plugin changes.
+Set `CURSOR_API_KEY` in your environment or through OpenClaw provider auth.
 
-For live thinking previews in Telegram, use `/reasoning stream`. Tool progress lines appear in the answer preview when `channels.*.streaming.preview.toolProgress` is enabled (default).
+### Telegram live previews
+
+| `/reasoning` mode | Thinking | Tool progress lines |
+|-------------------|----------|---------------------|
+| `stream` | Live reasoning draft | Live answer-preview lines (Cursor SDK tools: read, grep, shell, …) |
+| `on` | Included in final answer | **No** live tool progress (answer draft lane disabled) |
+| `off` | Hidden | No live tool progress |
+
+Use **`/reasoning stream`** with `channels.telegram.streaming.mode: partial` for Codex-style live previews. Tool progress shows **Cursor SDK native tools only**, not OpenClaw plugin tools (Trello, skills, etc.).
 
 ## Development
 
@@ -128,16 +129,6 @@ Optional plugin config:
 ## Known issues
 
 See [docs/KNOWN_ISSUES.md](./docs/KNOWN_ISSUES.md) — notably Telegram tool-progress preview cleanup (needs upstream OpenClaw fix).
-
-## Publishing to ClawHub
-
-```bash
-npm install
-npm test
-clawhub publish   # requires ClawHub auth; package.json has publishToClawHub: true
-```
-
-After publish, install with `openclaw plugins install clawhub:@daswass/openclaw-cursor-sdk`.
 
 ## Coexistence with cursor-cli
 
