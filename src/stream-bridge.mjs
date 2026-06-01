@@ -32,6 +32,33 @@ async function emitToolAgentEvent(callbacks, payload) {
   }
 }
 
+function stringifyToolMeta(meta) {
+  if (typeof meta === "string") {
+    return meta.trim() || undefined;
+  }
+  if (meta == null) {
+    return undefined;
+  }
+  return String(meta).trim() || undefined;
+}
+
+async function emitToolItemEvent(callbacks, { callId, name, phase, status, meta }) {
+  const metaText = stringifyToolMeta(meta);
+  await emitToolAgentEvent(callbacks, {
+    stream: "item",
+    data: {
+      itemId: `tool:${callId}`,
+      kind: "tool",
+      name,
+      phase,
+      status,
+      title: metaText ? `${name} ${metaText}` : name,
+      meta: metaText,
+      toolCallId: callId,
+    },
+  });
+}
+
 async function emitToolUpdate(state, callbacks, { callId, name, args }) {
   const detailMode = callbacks.toolProgressDetail ?? "explain";
   const meta = inferToolMetaFromArgs(name, args, { detailMode });
@@ -46,6 +73,13 @@ async function emitToolUpdate(state, callbacks, { callId, name, args }) {
       ...(args !== undefined ? { args } : {}),
       ...(meta ? { meta } : {}),
     },
+  });
+  await emitToolItemEvent(callbacks, {
+    callId,
+    name,
+    phase: "update",
+    status: "running",
+    meta,
   });
 }
 
@@ -83,6 +117,13 @@ async function emitToolStart(state, callbacks, { callId, name, args }) {
       ...(args !== undefined ? { args } : {}),
       ...(meta ? { meta } : {}),
     },
+  });
+  await emitToolItemEvent(callbacks, {
+    callId,
+    name,
+    phase: "start",
+    status: "running",
+    meta,
   });
 }
 
@@ -140,6 +181,13 @@ async function handleToolCallEvent(event, state, callbacks) {
         ...(event.result !== undefined ? { result: event.result } : {}),
         ...(meta ? { meta } : {}),
       },
+    });
+    await emitToolItemEvent(callbacks, {
+      callId,
+      name,
+      phase: "result",
+      status: event.status === "error" ? "error" : "completed",
+      meta,
     });
     return state;
   }

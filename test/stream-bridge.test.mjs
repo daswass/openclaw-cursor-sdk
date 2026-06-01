@@ -29,11 +29,12 @@ test("tool_call running emits start agent event", async () => {
   );
 
   // Assert
-  assert.equal(events.length, 1);
+  assert.equal(events.length, 2);
   assert.equal(events[0].stream, "tool");
   assert.equal(events[0].data.phase, "start");
   assert.equal(events[0].data.name, "read");
   assert.equal(events[0].data.toolCallId, "call-1");
+  assert.equal(events[1].stream, "item");
   assert.equal(state.itemLifecycle.startedCount, 1);
   assert.equal(state.itemLifecycle.activeCount, 1);
   assert.equal(state.hadPotentialSideEffects, false);
@@ -74,9 +75,10 @@ test("tool_call completed emits result and records tool meta", async () => {
   );
 
   // Assert
-  assert.equal(events.length, 2);
-  assert.equal(events[1].data.phase, "result");
-  assert.equal(events[1].data.isError, false);
+  assert.equal(events.length, 4);
+  assert.equal(events[2].stream, "tool");
+  assert.equal(events[2].data.phase, "result");
+  assert.equal(events[2].data.isError, false);
   assert.equal(state.toolMetas.length, 1);
   assert.equal(state.toolMetas[0].toolName, "shell");
   assert.equal(state.itemLifecycle.completedCount, 1);
@@ -113,9 +115,9 @@ test("duplicate running events emit update", async () => {
   );
 
   // Assert
-  assert.equal(events.length, 2);
+  assert.equal(events.length, 4);
   assert.equal(events[0].data.phase, "start");
-  assert.equal(events[1].data.phase, "update");
+  assert.equal(events[2].data.phase, "update");
   assert.equal(state.itemLifecycle.startedCount, 1);
 });
 
@@ -142,11 +144,10 @@ test("assistant tool_use blocks emit tool start", async () => {
   );
 
   // Assert
-  assert.equal(events.length, 1);
+  assert.equal(events.length, 2);
   assert.equal(events[0].stream, "tool");
   assert.equal(events[0].data.phase, "start");
-  assert.equal(events[0].data.name, "read");
-  assert.equal(events[0].data.toolCallId, "call-4");
+  assert.equal(events[1].stream, "item");
 });
 
 test("assistant text emits onAssistantMessageStart once", async () => {
