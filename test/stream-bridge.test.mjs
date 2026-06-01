@@ -35,6 +35,7 @@ test("tool_call running emits start agent event", async () => {
   assert.equal(events[0].data.name, "read");
   assert.equal(events[0].data.toolCallId, "call-1");
   assert.equal(events[1].stream, "item");
+  assert.equal(events[1].data.suppressChannelProgress, true);
   assert.equal(state.itemLifecycle.startedCount, 1);
   assert.equal(state.itemLifecycle.activeCount, 1);
   assert.equal(state.hadPotentialSideEffects, false);
@@ -44,9 +45,13 @@ test("tool_call completed emits result and records tool meta", async () => {
   // Arrange
   const state = createStreamState();
   const events = [];
+  let boundaries = 0;
   const callbacks = {
     onAgentEvent: async (evt) => {
       events.push(evt);
+    },
+    onAssistantMessageStart: async () => {
+      boundaries += 1;
     },
   };
 
@@ -84,6 +89,8 @@ test("tool_call completed emits result and records tool meta", async () => {
   assert.equal(state.itemLifecycle.completedCount, 1);
   assert.equal(state.itemLifecycle.activeCount, 0);
   assert.equal(state.hadPotentialSideEffects, true);
+  assert.equal(events[3].data.suppressChannelProgress, true);
+  assert.equal(boundaries, 1);
 });
 
 test("duplicate running events emit update", async () => {
@@ -125,9 +132,13 @@ test("assistant tool_use blocks emit tool start", async () => {
   // Arrange
   const state = createStreamState();
   const events = [];
+  let boundaries = 0;
   const callbacks = {
     onAgentEvent: async (evt) => {
       events.push(evt);
+    },
+    onAssistantMessageStart: async () => {
+      boundaries += 1;
     },
   };
 
@@ -148,6 +159,43 @@ test("assistant tool_use blocks emit tool start", async () => {
   assert.equal(events[0].stream, "tool");
   assert.equal(events[0].data.phase, "start");
   assert.equal(events[1].stream, "item");
+  assert.equal(events[1].data.suppressChannelProgress, true);
+  assert.equal(boundaries, 1);
+});
+
+test("assistant tool_use before text resets progress boundary first", async () => {
+  // Arrange
+  const state = createStreamState();
+  const order = [];
+  const callbacks = {
+    onAssistantMessageStart: async () => {
+      order.push("boundary");
+    },
+    onAgentEvent: async (evt) => {
+      if (evt.stream === "tool" && evt.data.phase === "start") {
+        order.push("tool");
+      }
+    },
+    onPartialReply: async () => {},
+  };
+
+  // Act
+  await bridgeSdkStreamEvent(
+    {
+      type: "assistant",
+      message: {
+        content: [
+          { type: "tool_use", id: "call-5", name: "read", input: { path: "README.md" } },
+          { type: "text", text: "Done." },
+        ],
+      },
+    },
+    state,
+    callbacks,
+  );
+
+  // Assert
+  assert.deepEqual(order, ["boundary", "tool", "boundary"]);
 });
 
 test("thinking is suppressed unless streamThinkingToChannels is true", async () => {

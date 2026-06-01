@@ -55,8 +55,28 @@ async function emitToolItemEvent(callbacks, { callId, name, phase, status, meta 
       title: metaText ? `${name} ${metaText}` : name,
       meta: metaText,
       toolCallId: callId,
+      // Match Codex: channel progress uses stream:tool only; item events are diagnostic.
+      suppressChannelProgress: true,
     },
   });
+}
+
+/** Reset Telegram tool-progress draft between tools (Codex uses assistant boundaries). */
+async function notifyToolProgressBoundary(callbacks) {
+  if (callbacks.onAssistantMessageStart) {
+    await callbacks.onAssistantMessageStart();
+  }
+}
+
+async function markAssistantOutputStarted(state, callbacks) {
+  if (state.assistantStarted) {
+    return;
+  }
+  state.assistantStarted = true;
+  await notifyToolProgressBoundary(callbacks);
+  if (callbacks.onExecutionPhase) {
+    await callbacks.onExecutionPhase({ phase: "assistant_output_started" });
+  }
 }
 
 async function emitToolUpdate(state, callbacks, { callId, name, args }) {
@@ -189,6 +209,7 @@ async function handleToolCallEvent(event, state, callbacks) {
       status: event.status === "error" ? "error" : "completed",
       meta,
     });
+    await notifyToolProgressBoundary(callbacks);
     return state;
   }
 
@@ -217,6 +238,12 @@ export async function bridgeSdkStreamEvent(event, state, callbacks) {
       if (!Array.isArray(blocks)) {
         return state;
       }
+
+      const hasToolUse = blocks.some((block) => block?.type === "tool_use");
+      if (hasToolUse) {
+        await notifyToolProgressBoundary(callbacks);
+      }
+
       let delta = "";
       for (const block of blocks) {
         if (block?.type === "text" && typeof block.text === "string") {
@@ -236,15 +263,7 @@ export async function bridgeSdkStreamEvent(event, state, callbacks) {
       if (!delta) {
         return state;
       }
-      if (!state.assistantStarted) {
-        state.assistantStarted = true;
-        if (callbacks.onAssistantMessageStart) {
-          await callbacks.onAssistantMessageStart();
-        }
-        if (callbacks.onExecutionPhase) {
-          await callbacks.onExecutionPhase({ phase: "assistant_output_started" });
-        }
-      }
+      await markAssistantOutputStarted(state, callbacks);
       state.assistantText += delta;
       if (callbacks.onPartialReply) {
         await callbacks.onPartialReply({ text: state.assistantText, delta });

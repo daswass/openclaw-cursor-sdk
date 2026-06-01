@@ -18,11 +18,13 @@
 
 **Cause:** OpenClaw Telegram `streaming.mode: partial` stores tool progress in the answer draft lane. Rotating from a tool-only draft to the final answer uses `stop()` + `forceNewMessage()` and can leave the old preview message orphaned.
 
-**Do not fix locally with `stream.clear()` in `rotateAnswerLaneAfterToolProgress`:** A local patch that called `clear()` there also deleted final answers on some turns (2026-05-31).
+**Do not fix in local OpenClaw core** unless you explicitly want that maintenance burden. A `stream.clear()` patch deleted final answers on some turns (2026-05-31). Deleting by `messageId` works but belongs upstream (Trello UiIqeg7M), not in the plugin repo.
 
-**Status:** Plugin harness emits correct `stream: tool` events and `onAssistantMessageStart` at first assistant text. Needs an **upstream OpenClaw fix** to delete only tool-only drafts without clearing the answer lane.
+**Status (2026-06-01):**
+- **Plugin** (`stream-bridge.mjs`): Codex harness semantics for **in-turn** tool line replacement — `suppressChannelProgress` on item events; `onAssistantMessageStart` before `tool_use` and after each tool `result`.
+- **End-of-turn orphan** (stale `📖 Read: ...` bubble above final answer): OpenClaw Telegram `partial` mode leaves the tool-only preview message when the answer lane rotates. Cursor SDK often streams tools first, then assistant text, so the channel marks the draft as non–tool-only before cleanup runs. Codex frequently interleaves assistant deltas earlier, so the same core path behaves better. **Not fixable from the plugin alone** (no API to delete Telegram messages).
 
-**Workaround:** Ignore stale tool preview messages, or switch to `channels.telegram.streaming.mode: progress` if acceptable for your UX.
+**Workarounds:** Ignore the stale bubble; or set `channels.telegram.streaming.mode` to `progress` in `openclaw.json` and test whether UX is acceptable.
 
 ## OpenClaw core patch tracking
 
