@@ -1,6 +1,14 @@
 import { Agent, CursorAgentError } from "@cursor/sdk";
 import { classifyAgentHarnessTerminalOutcome } from "openclaw/plugin-sdk/agent-harness-runtime";
-import { drainSdkStream } from "./stream-bridge.mjs";
+import { withCursorSdkConnectionGate } from "./connection-gate.mjs";
+import {
+  DEFAULT_MAX_ATTEMPTS,
+  isRetryableCursorSdkError,
+  isRetryableCursorSdkRunFailure,
+  retryDelayMs,
+  sleep,
+} from "./retry.mjs";
+import { drainSdkStream, resolveStreamedFinalText } from "./stream-bridge.mjs";
 import {
   clearCursorSdkAgentId,
   readCursorSdkAgentId,
@@ -22,7 +30,7 @@ function resolveApiKey() {
 
 function resolveModelId(params, pluginConfig) {
   const fromRun = params.modelId?.trim();
-  if (fromRun) {
+  if (fromRun && fromRun !== "auto") {
     return fromRun;
   }
   const fallback = pluginConfig?.defaultModel?.trim();
@@ -67,8 +75,8 @@ function buildFailureResult(params, message) {
   };
 }
 
-function buildSuccessResult(params, state, agentId) {
-  const assistantText = state.assistantText.trim();
+function buildSuccessResult(params, state, agentId, finalText) {
+  const assistantText = (finalText ?? "").trim();
   const assistantTexts = assistantText ? [assistantText] : [];
   const lastAssistant = assistantText
     ? {
@@ -135,11 +143,19 @@ async function sendPrompt(agent, prompt) {
   }
 }
 
-async function openAgent(params, pluginConfig) {
+async function prepareCursorSdkRetry(params) {
+  if (params.sessionId) {
+    await clearCursorSdkAgentId(params.sessionId);
+  }
+}
+
+async function openAgent(params, pluginConfig, { forceFresh = false } = {}) {
   const apiKey = resolveApiKey();
   const modelId = resolveModelId(params, pluginConfig);
   const cwd = resolveCwd(params, pluginConfig);
-  const boundAgentId = await readCursorSdkAgentId(params.sessionId);
+  const boundAgentId = forceFresh
+    ? undefined
+    : await readCursorSdkAgentId(params.sessionId);
 
   const baseOptions = {
     apiKey,
@@ -176,6 +192,7 @@ export function createCursorSdkHarness(pluginConfig = {}) {
     },
 
     async runAttempt(params) {
+      return withCursorSdkConnectionGate(async () => {
       params.onExecutionStarted?.();
       params.onExecutionPhase?.({
         phase: "attempt_dispatch",
@@ -184,74 +201,144 @@ export function createCursorSdkHarness(pluginConfig = {}) {
         backend: HARNESS_ID,
       });
 
-      let agent;
-      let agentId;
-      try {
-        ({ agent, agentId } = await openAgent(params, pluginConfig));
-      } catch (err) {
-        const message =
-          err instanceof CursorAgentError
-            ? `Cursor SDK startup failed: ${err.message}`
-            : String(err?.message ?? err);
-        return buildFailureResult(params, message);
-      }
-
-      await using _agent = agent;
-
-      try {
-        params.onExecutionPhase?.({
-          phase: "turn_accepted",
-          provider: params.provider,
-          model: params.modelId,
-          backend: HARNESS_ID,
-        });
-
-        const run = await sendPrompt(agent, params.prompt);
-
-        const state = await drainSdkStream(run.stream(), {
-          onPartialReply: params.onPartialReply,
-          onReasoningStream: params.onReasoningStream,
-          onReasoningEnd: params.onReasoningEnd,
-          onAssistantMessageStart: params.onAssistantMessageStart,
-          onAgentEvent: params.onAgentEvent,
-          toolProgressDetail: params.toolProgressDetail,
-          streamThinkingToChannels: pluginConfig.streamThinkingToChannels === true,
-          onExecutionPhase: (info) =>
-            params.onExecutionPhase?.({
-              provider: params.provider,
-              model: params.modelId,
-              backend: HARNESS_ID,
-              ...info,
-            }),
-        });
-
-        const result = await run.wait();
-        if (result.status === "error") {
-          return buildFailureResult(
-            params,
-            `Cursor SDK run failed (${result.id ?? "unknown"})`,
+      let forceFresh = false;
+      for (let attempt = 1; attempt <= DEFAULT_MAX_ATTEMPTS; attempt += 1) {
+        if (attempt > 1) {
+          const delayMs = retryDelayMs(attempt - 1);
+          console.warn(
+            `[cursor-sdk] retrying turn (${attempt}/${DEFAULT_MAX_ATTEMPTS}) after ${delayMs}ms`,
           );
+          await sleep(delayMs);
         }
 
-        if (agentId) {
-          await writeCursorSdkAgentId(params.sessionId, agentId);
+        const startedAt = Date.now();
+        let agent;
+        let agentId;
+        try {
+          ({ agent, agentId } = await openAgent(params, pluginConfig, { forceFresh }));
+          forceFresh = false;
+        } catch (err) {
+          if (attempt < DEFAULT_MAX_ATTEMPTS && isRetryableCursorSdkError(err)) {
+            await prepareCursorSdkRetry(params);
+            forceFresh = true;
+            continue;
+          }
+          const message =
+            err instanceof CursorAgentError
+              ? `Cursor SDK startup failed: ${err.message}`
+              : String(err?.message ?? err);
+          return buildFailureResult(params, message);
         }
 
-        return buildSuccessResult(params, state, agentId);
-      } catch (err) {
-        if (params.abortSignal?.aborted) {
-          return {
-            ...buildFailureResult(params, "Cursor SDK run aborted"),
-            aborted: true,
-            externalAbort: true,
-          };
+        await using _agent = agent;
+
+        try {
+          params.onExecutionPhase?.({
+            phase: "turn_accepted",
+            provider: params.provider,
+            model: params.modelId,
+            backend: HARNESS_ID,
+          });
+
+          const run = await sendPrompt(agent, params.prompt);
+          const stream = run.stream();
+
+          // Drain the stream and await the terminal result together. Attach inert
+          // catches first so that if one path rejects, the other's rejection never
+          // escapes as an unhandled rejection (which would crash the gateway).
+          const streamPromise = drainSdkStream(stream, {
+            onPartialReply: params.onPartialReply,
+            onReasoningStream: params.onReasoningStream,
+            onReasoningEnd: params.onReasoningEnd,
+            onAssistantMessageStart: params.onAssistantMessageStart,
+            onAgentEvent: params.onAgentEvent,
+            toolProgressDetail: params.toolProgressDetail,
+            streamThinkingToChannels: pluginConfig.streamThinkingToChannels === true,
+            onExecutionPhase: (info) =>
+              params.onExecutionPhase?.({
+                provider: params.provider,
+                model: params.modelId,
+                backend: HARNESS_ID,
+                ...info,
+              }),
+          });
+          const waitPromise = run.wait();
+          streamPromise.catch(() => {});
+          waitPromise.catch(() => {});
+
+          let state;
+          let result;
+          try {
+            [state, result] = await Promise.all([streamPromise, waitPromise]);
+          } catch (err) {
+            if (params.abortSignal?.aborted) {
+              throw err;
+            }
+            if (attempt < DEFAULT_MAX_ATTEMPTS && isRetryableCursorSdkError(err)) {
+              await prepareCursorSdkRetry(params);
+              forceFresh = true;
+              continue;
+            }
+            const message =
+              err instanceof CursorAgentError
+                ? `Cursor SDK error: ${err.message}`
+                : String(err?.message ?? err);
+            return buildFailureResult(params, message);
+          }
+          if (result.status === "error") {
+            const elapsedMs = Date.now() - startedAt;
+            if (
+              attempt < DEFAULT_MAX_ATTEMPTS &&
+              isRetryableCursorSdkRunFailure({
+                elapsedMs,
+                lastError: state.lastError,
+              })
+            ) {
+              await prepareCursorSdkRetry(params);
+              forceFresh = true;
+              continue;
+            }
+            return buildFailureResult(
+              params,
+              `Cursor SDK run failed (${result.id ?? "unknown"})`,
+            );
+          }
+
+          if (agentId) {
+            await writeCursorSdkAgentId(params.sessionId, agentId);
+          }
+
+          // Authoritative final answer from the run result (SDK's finalAssistantText);
+          // fall back to the trailing streamed segment if the result text is empty.
+          const resultText =
+            typeof result.result === "string" && result.result.trim()
+              ? result.result
+              : resolveStreamedFinalText(state);
+
+          return buildSuccessResult(params, state, agentId, resultText);
+        } catch (err) {
+          if (params.abortSignal?.aborted) {
+            return {
+              ...buildFailureResult(params, "Cursor SDK run aborted"),
+              aborted: true,
+              externalAbort: true,
+            };
+          }
+          if (attempt < DEFAULT_MAX_ATTEMPTS && isRetryableCursorSdkError(err)) {
+            await prepareCursorSdkRetry(params);
+            forceFresh = true;
+            continue;
+          }
+          const message =
+            err instanceof CursorAgentError
+              ? `Cursor SDK error: ${err.message}`
+              : String(err?.message ?? err);
+          return buildFailureResult(params, message);
         }
-        const message =
-          err instanceof CursorAgentError
-            ? `Cursor SDK error: ${err.message}`
-            : String(err?.message ?? err);
-        return buildFailureResult(params, message);
       }
+
+      return buildFailureResult(params, "Cursor SDK run failed after retries");
+      });
     },
 
     async reset(params) {

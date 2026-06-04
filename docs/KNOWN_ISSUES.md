@@ -28,4 +28,25 @@
 
 ## OpenClaw core patch tracking
 
-If applying a local Telegram fix, track it outside the plugin repo (see WassClaw Trello: OpenClaw local patch card). Re-verify after every `npm update openclaw`.
+If applying a local Telegram fix, track it outside the plugin repo in your own issue tracker. Re-verify after every `npm update openclaw`.
+
+## Cursor SDK: HTTP/2 transport failures (`NGHTTP2_ENHANCE_YOUR_CALM`)
+
+**Symptom:** Telegram (or other channels) show `Agent failed before reply: Cursor SDK run failed (run-…)` after ~1–3 seconds. Gateway logs may include `ConnectError: Stream closed with error code NGHTTP2_ENHANCE_YOUR_CALM`, `write ECANCELED`, or `NGHTTP2_INTERNAL_ERROR`.
+
+**Root cause:** The local `@cursor/sdk` runtime opens HTTP/2 streams to Cursor's API. Too many concurrent lifecycles (multiple sessions, resume bindings, rapid retries, stale local `agent` CLI processes) trigger server-side rate limiting. Retries that reconnect immediately make this worse.
+
+**Plugin mitigations (2026-06-03):**
+- Serialize SDK turns per gateway process (`connection-gate.mjs`)
+- On transport failure: clear session binding and `Agent.create` fresh instead of `Agent.resume`
+- Longer exponential backoff (2s base, 5 attempts) before retry
+- Connect-guard suppresses benign background transport rejections so the gateway does not crash-loop
+
+**OpenClaw failover caveat:** When a session has an explicit model override (Control UI → `cursor-sdk/…`), OpenClaw sets `fallbackConfigured: false` and will **not** auto-failover to `cursor-cli`. Clear the session override or switch model back to defaults to allow fallback.
+
+**Hygiene:**
+- `node scripts/cleanup-sessions.mjs --apply` — prune stale bindings
+- Kill orphaned `agent --use-system-ca` processes if they accumulate
+- Restart the OpenClaw gateway after plugin changes
+
+**Status:** Under active hardening. If failures persist after gateway restart, use `cursor-cli/composer-2.5` as interim backend while investigating upstream SDK/API limits.

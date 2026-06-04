@@ -44,13 +44,14 @@ node scripts/cleanup-sessions.mjs --apply
 node scripts/cleanup-sessions.mjs --apply --prune-openclaw-artifacts
 ```
 
-Scheduled wrapper (Mac mini):
+Scheduled maintenance (recommended weekly):
 
 ```bash
-~/.openclaw/scripts/cursor-sdk-session-cleanup.sh
+openclaw sessions cleanup --all-agents --enforce
+node scripts/cleanup-sessions.mjs --apply --prune-openclaw-artifacts
 ```
 
-Add to cron or LaunchAgent weekly; script logs to `~/.openclaw/logs/cursor-sdk-session-cleanup.log`.
+Run via cron, LaunchAgent, or an OpenClaw scheduled job. For bindings only (no artifact prune): `node scripts/cleanup-sessions.mjs --apply`.
 
 ## Operator checklist
 
@@ -60,8 +61,6 @@ Add to cron or LaunchAgent weekly; script logs to `~/.openclaw/logs/cursor-sdk-s
 4. After OpenClaw upgrades, re-run dry-run (paths unchanged)
 5. Use `/reset` or harness `reset` to clear a single session binding without deleting transcripts
 
-## Inventory (2026-06-01, WassClaw Mac mini)
+## Inventory snapshot
 
-- `~/.openclaw/state/cursor-sdk`: 42 bindings, **38 orphan** (~168 KiB total)
-- `~/.openclaw/agents/main/sessions`: ~705 MiB, ~2900 files (all harnesses)
-- Active OpenClaw sessions in store: 39
+Dry-run output reports orphan vs stale binding counts and optional artifact prune candidates. Orphan bindings are common when sessions are removed from the store but binding files remain.

@@ -1,4 +1,5 @@
 import { definePluginEntry } from "openclaw/plugin-sdk/core";
+import { installCursorConnectTransportGuard } from "./src/connect-guard.mjs";
 import { createCursorSdkHarness } from "./src/harness.mjs";
 import { listCursorSdkCatalogModels } from "./src/catalog.mjs";
 
@@ -10,6 +11,7 @@ export default definePluginEntry({
   description:
     "OpenClaw agent harness that runs turns through the local Cursor SDK (@cursor/sdk) with native thinking stream support.",
   register(api) {
+    installCursorConnectTransportGuard();
     const pluginConfig = api?.pluginConfig ?? {};
     const harness = createCursorSdkHarness(pluginConfig);
 
