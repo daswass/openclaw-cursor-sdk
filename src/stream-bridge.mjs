@@ -368,6 +368,9 @@ export async function drainSdkStream(stream, callbacks) {
     }
   } catch (err) {
     state.lastError = err;
+    if (err && typeof err === "object") {
+      err.cursorSdkStreamState = state;
+    }
     throw err;
   }
   if (callbacks.streamThinkingToChannels && callbacks.onReasoningEnd && state.reasoningText) {

@@ -9,6 +9,7 @@ import {
   sleep,
 } from "./retry.mjs";
 import { drainSdkStream, resolveStreamedFinalText } from "./stream-bridge.mjs";
+import { buildFailureResult } from "./harness-result.mjs";
 import {
   clearCursorSdkAgentId,
   readCursorSdkAgentId,
@@ -40,39 +41,6 @@ function resolveModelId(params, pluginConfig) {
 function resolveCwd(params, pluginConfig) {
   const configured = pluginConfig?.cwd?.trim();
   return configured || params.workspaceDir || process.cwd();
-}
-
-function buildFailureResult(params, message) {
-  return {
-    aborted: false,
-    externalAbort: false,
-    timedOut: false,
-    idleTimedOut: false,
-    timedOutDuringCompaction: false,
-    timedOutDuringToolExecution: false,
-    promptError: message,
-    promptErrorSource: "prompt",
-    sessionIdUsed: params.sessionId,
-    agentHarnessId: HARNESS_ID,
-    messagesSnapshot: [],
-    assistantTexts: [],
-    toolMetas: [],
-    lastAssistant: undefined,
-    didSendViaMessagingTool: false,
-    messagingToolSentTexts: [],
-    messagingToolSentMediaUrls: [],
-    messagingToolSentTargets: [],
-    cloudCodeAssistFormatError: false,
-    replayMetadata: {
-      hadPotentialSideEffects: false,
-      replaySafe: true,
-    },
-    itemLifecycle: {
-      startedCount: 0,
-      completedCount: 0,
-      activeCount: 0,
-    },
-  };
 }
 
 function buildSuccessResult(params, state, agentId, finalText) {
@@ -129,6 +97,19 @@ function buildSuccessResult(params, state, agentId, finalText) {
 function isActiveRunError(err) {
   const message = String(err?.message ?? err ?? "");
   return message.includes("already has active run");
+}
+
+/** Normalize a captured stream/run error into a short human-readable reason. */
+function formatCursorSdkError(err) {
+  if (err == null) {
+    return undefined;
+  }
+  if (typeof err === "string") {
+    return err.trim() || undefined;
+  }
+  const message = err?.message ?? String(err);
+  const text = String(message).trim();
+  return text || undefined;
 }
 
 async function sendPrompt(agent, prompt) {
@@ -269,7 +250,11 @@ export function createCursorSdkHarness(pluginConfig = {}) {
           let state;
           let result;
           try {
-            [state, result] = await Promise.all([streamPromise, waitPromise]);
+            const wrappedStreamPromise = streamPromise.then((value) => {
+              state = value;
+              return value;
+            });
+            [state, result] = await Promise.all([wrappedStreamPromise, waitPromise]);
           } catch (err) {
             if (params.abortSignal?.aborted) {
               throw err;
@@ -283,7 +268,7 @@ export function createCursorSdkHarness(pluginConfig = {}) {
               err instanceof CursorAgentError
                 ? `Cursor SDK error: ${err.message}`
                 : String(err?.message ?? err);
-            return buildFailureResult(params, message);
+            return buildFailureResult(params, message, state ?? err?.cursorSdkStreamState);
           }
           if (result.status === "error") {
             const elapsedMs = Date.now() - startedAt;
@@ -298,10 +283,19 @@ export function createCursorSdkHarness(pluginConfig = {}) {
               forceFresh = true;
               continue;
             }
-            return buildFailureResult(
-              params,
-              `Cursor SDK run failed (${result.id ?? "unknown"})`,
+            // Surface the underlying SDK reason (rate limit, unavailable, auth,
+            // expired agent, etc.) instead of an opaque run id so recurring
+            // failures are diagnosable from the gateway log and failover message.
+            const reason = formatCursorSdkError(state.lastError);
+            const message = `Cursor SDK run failed (${result.id ?? "unknown"})${
+              reason ? `: ${reason}` : ""
+            }`;
+            console.warn(
+              `[cursor-sdk] ${message} (model=${params.modelId ?? "auto"}, session=${
+                params.sessionId ?? "unknown"
+              })`,
             );
+            return buildFailureResult(params, message, state);
           }
 
           if (agentId) {
@@ -317,9 +311,10 @@ export function createCursorSdkHarness(pluginConfig = {}) {
 
           return buildSuccessResult(params, state, agentId, resultText);
         } catch (err) {
+          const partialState = err?.cursorSdkStreamState;
           if (params.abortSignal?.aborted) {
             return {
-              ...buildFailureResult(params, "Cursor SDK run aborted"),
+              ...buildFailureResult(params, "Cursor SDK run aborted", partialState),
               aborted: true,
               externalAbort: true,
             };
@@ -333,7 +328,7 @@ export function createCursorSdkHarness(pluginConfig = {}) {
             err instanceof CursorAgentError
               ? `Cursor SDK error: ${err.message}`
               : String(err?.message ?? err);
-          return buildFailureResult(params, message);
+          return buildFailureResult(params, message, partialState);
         }
       }
 
