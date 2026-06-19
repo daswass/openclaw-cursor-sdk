@@ -39,7 +39,8 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@cursor/sdk": "1.0.17"
+    "@cursor/sdk": "1.0.17",
+    "headroom-ai": "^0.22.4"
   },
   "devDependencies": {
     "openclaw": "2026.5.12"

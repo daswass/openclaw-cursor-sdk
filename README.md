@@ -150,3 +150,23 @@ This plugin complements the CLI-based [`openclaw-cursor-cli`](https://github.com
 ## License
 
 MIT — see [LICENSE](./LICENSE).
+
+### Headroom compression spike
+
+Headroom (`headroom-ai`) is wired as an **off-by-default** experiment for compressing oversized prompts before sending them to the Cursor SDK agent:
+
+```json
+{
+  "headroom": {
+    "enabled": false,
+    "baseUrl": "http://localhost:8787",
+    "minInputChars": 12000,
+    "timeoutMs": 15000,
+    "fallback": true
+  }
+}
+```
+
+Environment shortcut: `CURSOR_SDK_HEADROOM_ENABLED=true`.
+
+Current scope is deliberately narrow: only the initial prompt passed through this harness can be compressed. Cursor SDK does not currently expose a clean middleware hook for rewriting internal tool results before they are fed back to Cursor's model, so true large tool-output/log compression remains blocked on a lower-level SDK/OpenClaw interception point. Keep cross-agent memory, output shaping, and `headroom learn` disabled until replay/eval proves they preserve behavior.

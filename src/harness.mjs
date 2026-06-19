@@ -10,6 +10,7 @@ import {
 } from "./retry.mjs";
 import { drainSdkStream, resolveStreamedFinalText } from "./stream-bridge.mjs";
 import { buildFailureResult } from "./harness-result.mjs";
+import { maybeCompressPromptWithHeadroom } from "./headroom.mjs";
 import {
   clearCursorSdkAgentId,
   readCursorSdkAgentId,
@@ -221,7 +222,23 @@ export function createCursorSdkHarness(pluginConfig = {}) {
             backend: HARNESS_ID,
           });
 
-          const run = await sendPrompt(agent, params.prompt);
+          const headroom = await maybeCompressPromptWithHeadroom(params.prompt, pluginConfig, {
+            modelId: params.modelId,
+          });
+          if (headroom.applied || headroom.error) {
+            params.onExecutionPhase?.({
+              phase: "headroom_compression",
+              provider: params.provider,
+              model: params.modelId,
+              backend: HARNESS_ID,
+              applied: headroom.applied,
+              reason: headroom.reason,
+              ...(headroom.stats ? { stats: headroom.stats } : {}),
+              ...(headroom.error ? { error: headroom.error } : {}),
+            });
+          }
+
+          const run = await sendPrompt(agent, headroom.prompt);
           const stream = run.stream();
 
           // Drain the stream and await the terminal result together. Attach inert
