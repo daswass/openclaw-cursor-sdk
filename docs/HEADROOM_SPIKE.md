@@ -41,6 +41,64 @@ Environment shortcut:
 CURSOR_SDK_HEADROOM_ENABLED=true
 ```
 
+## Reversal / rollback
+
+This Cursor SDK spike is designed to be easy to back out.
+
+### Disable without code changes
+
+Use either of these:
+
+```json
+{
+  "headroom": {
+    "enabled": false
+  }
+}
+```
+
+or remove `CURSOR_SDK_HEADROOM_ENABLED` from the environment.
+
+Because the default is disabled and `fallback` defaults to true, a Headroom proxy outage should preserve the original prompt rather than fail a turn.
+
+### Remove the spike from the repo
+
+Revert the implementation commit:
+
+```bash
+git revert 8ddd50b
+npm test
+```
+
+That removes:
+
+- `headroom-ai` from `package.json` / `package-lock.json`
+- `src/headroom.mjs`
+- the harness pre-send compression hook
+- `test/headroom.test.mjs`
+- this spike doc / README section
+
+### If testing Headroom as an OpenClaw ContextEngine
+
+Keep that rollout separate from this Cursor SDK spike. To back out the OpenClaw ContextEngine path, restore the context engine slot to legacy and restart the gateway:
+
+```json
+{
+  "plugins": {
+    "slots": {
+      "contextEngine": "legacy"
+    },
+    "entries": {
+      "headroom": {
+        "enabled": false
+      }
+    }
+  }
+}
+```
+
+If Headroom was routing providers through its proxy, also disable `routeCodexViaProxy` / clear `gatewayProviderIds` before restart. Prefer a config patch over manual file editing so existing OpenClaw config is preserved.
+
 ## Explicit non-goals for the first spike
 
 Do not enable these yet:
