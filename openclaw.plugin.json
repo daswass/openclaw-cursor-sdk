@@ -3,14 +3,14 @@
   "name": "Cursor SDK",
   "description": "Run OpenClaw agent turns through the local Cursor SDK (@cursor/sdk) with native thinking stream support.",
   "activation": {
-    "onStartup": true
+    "onStartup": true,
+    "onAgentHarnesses": ["cursor-sdk"]
   },
   "enabledByDefault": false,
   "providers": ["cursor-sdk"],
   "modelSupport": {
     "modelPrefixes": ["cursor-sdk/"]
   },
-  "agentHarnesses": ["cursor-sdk"],
   "setup": {
     "providers": [
       {
