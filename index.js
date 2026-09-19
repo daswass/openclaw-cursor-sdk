@@ -30,17 +30,24 @@ export default definePluginEntry({
           order: "simple",
           run: async () => listCursorSdkCatalogModels(),
         },
-        resolveDynamicModel: (ctx) => ({
-          id: ctx.modelId,
-          name: ctx.modelId,
-          provider: PROVIDER_ID,
-          api: "openai-completions",
-          reasoning: ctx.modelId === "composer-2.5" || ctx.modelId.includes("thinking"),
-          input: ["text"],
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: 200000,
-          maxTokens: 32768,
-        }),
+        resolveDynamicModel: (ctx) => {
+          const id = String(ctx.modelId ?? "").trim();
+          const autoRouted = id === "default" || id === "auto" || id === "auto-smart";
+          return {
+            id,
+            name: id,
+            provider: PROVIDER_ID,
+            api: "openai-completions",
+            reasoning:
+              id === "composer-2.5" ||
+              id.includes("thinking") ||
+              id.includes("opus"),
+            input: ["text"],
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            contextWindow: autoRouted ? 1048576 : 200000,
+            maxTokens: autoRouted ? 131072 : 32768,
+          };
+        },
         classifyFailoverReason: classifyCursorSdkFailoverReason,
       });
     }

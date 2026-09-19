@@ -43,7 +43,7 @@
       },
       "defaultModel": {
         "type": "string",
-        "description": "Fallback Cursor model id when the resolved OpenClaw model id is unavailable (default: composer-2.5)."
+        "description": "Fallback Cursor model id when the resolved OpenClaw model id is unavailable (default: default)."
       },
       "streamThinkingToChannels": {
         "type": "boolean",

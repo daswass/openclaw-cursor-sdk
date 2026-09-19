@@ -2,18 +2,18 @@ import { Cursor } from "@cursor/sdk";
 
 export const DEFAULT_MODELS = [
   {
-    id: "composer-2.5",
-    name: "Composer 2.5",
-    reasoning: true,
-    contextWindow: 200000,
-    maxTokens: 32768,
-  },
-  {
     id: "default",
     name: "Default (server auto)",
     reasoning: false,
     contextWindow: 1048576,
     maxTokens: 131072,
+  },
+  {
+    id: "composer-2.5",
+    name: "Composer 2.5",
+    reasoning: true,
+    contextWindow: 200000,
+    maxTokens: 32768,
   },
   {
     id: "auto",

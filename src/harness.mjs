@@ -44,7 +44,7 @@ function resolveModelId(params, pluginConfig) {
     return normalizeCursorSdkModelId(fromRun);
   }
   const fallback = pluginConfig?.defaultModel?.trim();
-  return normalizeCursorSdkModelId(fallback) || "composer-2.5";
+  return normalizeCursorSdkModelId(fallback) || "default";
 }
 
 function resolveCwd(params, pluginConfig) {
