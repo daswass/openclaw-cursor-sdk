@@ -21,7 +21,7 @@ See [docs/ADR-001-repo-and-architecture.md](./docs/ADR-001-repo-and-architecture
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 22.13+ (required by `@cursor/sdk`)
 - OpenClaw 2026.5.7+ (2026.5.12 recommended)
 - A Cursor API key with SDK access
 

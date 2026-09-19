@@ -44,6 +44,8 @@ If applying a local Telegram fix, track it outside the plugin repo in your own i
 
 **OpenClaw failover caveat:** When a session has an explicit model override (Control UI → `cursor-sdk/…`), OpenClaw sets `fallbackConfigured: false` and will **not** auto-failover to `cursor-cli`. Clear the session override or switch model back to defaults to allow fallback.
 
+**Failover classification (2026-09-19):** The provider now registers `classifyFailoverReason` so generic `Cursor SDK run failed (run-…)` errors classify as `unavailable` and advance the configured model fallback chain (for example to `cursor-cli/*`). Restart the gateway after upgrading the plugin.
+
 **Hygiene:**
 - `node scripts/cleanup-sessions.mjs --apply` — prune stale bindings
 - Kill orphaned `agent --use-system-ca` processes if they accumulate

@@ -2,6 +2,7 @@ import { definePluginEntry } from "openclaw/plugin-sdk/core";
 import { installCursorConnectTransportGuard } from "./src/connect-guard.mjs";
 import { createCursorSdkHarness } from "./src/harness.mjs";
 import { listCursorSdkCatalogModels } from "./src/catalog.mjs";
+import { classifyCursorSdkFailoverReason } from "./src/failover.mjs";
 
 const PROVIDER_ID = "cursor-sdk";
 
@@ -40,6 +41,7 @@ export default definePluginEntry({
           contextWindow: 200000,
           maxTokens: 32768,
         }),
+        classifyFailoverReason: classifyCursorSdkFailoverReason,
       });
     }
   },

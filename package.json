@@ -39,7 +39,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@cursor/sdk": "^1.0.30",
+    "@cursor/sdk": "^1.0.31",
     "headroom-ai": "^0.22.4"
   },
   "devDependencies": {
@@ -61,6 +61,6 @@
     }
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22.13"
   }
 }
