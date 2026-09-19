@@ -9,8 +9,15 @@ export const DEFAULT_MODELS = [
     maxTokens: 32768,
   },
   {
+    id: "default",
+    name: "Default (server auto)",
+    reasoning: false,
+    contextWindow: 1048576,
+    maxTokens: 131072,
+  },
+  {
     id: "auto",
-    name: "Auto",
+    name: "Auto (alias → default)",
     reasoning: false,
     contextWindow: 1048576,
     maxTokens: 131072,
@@ -34,8 +41,8 @@ function mapSdkModel(model) {
     reasoning,
     input: ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: id === "auto" ? 1048576 : 200000,
-    maxTokens: id === "auto" ? 131072 : 32768,
+    contextWindow: id === "auto" || id === "default" ? 1048576 : 200000,
+    maxTokens: id === "auto" || id === "default" ? 131072 : 32768,
   };
 }
 

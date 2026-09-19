@@ -30,13 +30,21 @@ function resolveApiKey() {
   return key;
 }
 
+function normalizeCursorSdkModelId(modelId) {
+  const id = modelId?.trim();
+  if (!id || id === "auto" || id === "auto-smart") {
+    return "default";
+  }
+  return id;
+}
+
 function resolveModelId(params, pluginConfig) {
   const fromRun = params.modelId?.trim();
-  if (fromRun && fromRun !== "auto") {
-    return fromRun;
+  if (fromRun) {
+    return normalizeCursorSdkModelId(fromRun);
   }
   const fallback = pluginConfig?.defaultModel?.trim();
-  return fallback || "composer-2.5";
+  return normalizeCursorSdkModelId(fallback) || "composer-2.5";
 }
 
 function resolveCwd(params, pluginConfig) {
