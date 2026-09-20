@@ -1,5 +1,4 @@
 import { Agent, CursorAgentError } from "@cursor/sdk";
-import { classifyAgentHarnessTerminalOutcome } from "openclaw/plugin-sdk/agent-harness-runtime";
 import { withCursorSdkConnectionGate } from "./connection-gate.mjs";
 import {
   DEFAULT_MAX_ATTEMPTS,
@@ -9,7 +8,12 @@ import {
   sleep,
 } from "./retry.mjs";
 import { drainSdkStream, resolveStreamedFinalText } from "./stream-bridge.mjs";
-import { buildFailureResult } from "./harness-result.mjs";
+import { flushFinalPartialReply } from "./final-partial.mjs";
+import {
+  buildFailureResult,
+  buildSuccessResult,
+  isModelFallbackAttempt,
+} from "./harness-result.mjs";
 import { maybeCompressPromptWithHeadroom } from "./headroom.mjs";
 import {
   clearCursorSdkAgentId,
@@ -50,57 +54,6 @@ function resolveModelId(params, pluginConfig) {
 function resolveCwd(params, pluginConfig) {
   const configured = pluginConfig?.cwd?.trim();
   return configured || params.workspaceDir || process.cwd();
-}
-
-function buildSuccessResult(params, state, agentId, finalText) {
-  const assistantText = (finalText ?? "").trim();
-  const assistantTexts = assistantText ? [assistantText] : [];
-  const lastAssistant = assistantText
-    ? {
-        role: "assistant",
-        content: [{ type: "text", text: assistantText }],
-        api: "cursor-sdk",
-        provider: params.provider,
-        model: params.modelId,
-        stopReason: "stop",
-        timestamp: Date.now(),
-      }
-    : undefined;
-
-  const classification = classifyAgentHarnessTerminalOutcome({
-    assistantTexts,
-    reasoningText: state.reasoningText,
-    turnCompleted: true,
-  });
-
-  return {
-    aborted: false,
-    externalAbort: false,
-    timedOut: false,
-    idleTimedOut: false,
-    timedOutDuringCompaction: false,
-    timedOutDuringToolExecution: false,
-    promptError: state.lastError ?? null,
-    promptErrorSource: state.lastError ? "prompt" : null,
-    sessionIdUsed: params.sessionId,
-    agentHarnessId: HARNESS_ID,
-    agentHarnessResultClassification: classification,
-    messagesSnapshot: lastAssistant ? [lastAssistant] : [],
-    assistantTexts,
-    toolMetas: state.toolMetas,
-    lastAssistant,
-    didSendViaMessagingTool: false,
-    messagingToolSentTexts: [],
-    messagingToolSentMediaUrls: [],
-    messagingToolSentTargets: [],
-    cloudCodeAssistFormatError: false,
-    replayMetadata: {
-      hadPotentialSideEffects: state.hadPotentialSideEffects,
-      replaySafe: !state.hadPotentialSideEffects,
-    },
-    itemLifecycle: { ...state.itemLifecycle },
-    cursorSdkAgentId: agentId,
-  };
 }
 
 function isActiveRunError(err) {
@@ -191,7 +144,9 @@ export function createCursorSdkHarness(pluginConfig = {}) {
         backend: HARNESS_ID,
       });
 
-      let forceFresh = false;
+      // Model-fallback into this harness should not resume a prior Cursor agent
+      // binding from an unrelated primary-model attempt on the same session.
+      let forceFresh = isModelFallbackAttempt(params);
       for (let attempt = 1; attempt <= DEFAULT_MAX_ATTEMPTS; attempt += 1) {
         if (attempt > 1) {
           const delayMs = retryDelayMs(attempt - 1);
@@ -333,6 +288,14 @@ export function createCursorSdkHarness(pluginConfig = {}) {
             typeof result.result === "string" && result.result.trim()
               ? result.result
               : resolveStreamedFinalText(state);
+
+          await flushFinalPartialReply(
+            {
+              onPartialReply: params.onPartialReply,
+              onAssistantMessageStart: params.onAssistantMessageStart,
+            },
+            resultText,
+          );
 
           return buildSuccessResult(params, state, agentId, resultText);
         } catch (err) {

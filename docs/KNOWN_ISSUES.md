@@ -46,6 +46,10 @@ If applying a local Telegram fix, track it outside the plugin repo in your own i
 
 **Failover classification (2026-09-19):** The provider now registers `classifyFailoverReason` so generic `Cursor SDK run failed (run-…)` errors classify as `unavailable` and advance the configured model fallback chain (for example to `cursor-cli/*`). Restart the gateway after upgrading the plugin.
 
+**Terra → cursor-sdk auto-failover may show Done with no UI reply (OpenClaw core):** When primary `openai/gpt-5.6-terra` (or similar) hits a usage limit and OpenClaw fails over to `cursor-sdk/*`, Control UI can mark the turn **done** / `fallbackNotice.activeModel: cursor-sdk/…` while the transcript still only has Terra’s empty `stopReason: "error"` assistant and **no SDK reply**. CLI `openclaw agent --model cursor-sdk/default` can still return text. Channel delivery (Control UI / Telegram) may still show no bubble even for session-primary `cursor-sdk/*` — investigate transcript commit vs channel partials. Root cause for failover-without-transcript is OpenClaw cross-runtime settlement (not fully fixable in this plugin). **Interim:** try `cursor-cli/*` if SDK channel delivery stays blank; clear session model overrides when you want global fallbacks again.
+
+**Plugin hardenings (delivery when the harness does run):** End-of-turn `flushFinalPartialReply` re-emits the final answer with `replace: true`; model-fallback attempts force a fresh `Agent.create` (no stale resume); empty/failure results set `agentHarnessResultClassification: "empty"`.
+
 **Hygiene:**
 - `node scripts/cleanup-sessions.mjs --apply` — prune stale bindings
 - Kill orphaned `agent --use-system-ca` processes if they accumulate
