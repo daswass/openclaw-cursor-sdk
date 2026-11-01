@@ -45,3 +45,21 @@ test("isRetryableCursorSdkRunFailure retries when stream state captured transpor
     true,
   );
 });
+
+test("isRetryableCursorSdkRunFailure retries connection_stalled codes from SDK 1.0.34+", () => {
+  // Arrange // Act // Assert
+  assert.equal(
+    isRetryableCursorSdkRunFailure({
+      elapsedMs: 12_000,
+      lastError: { code: "connection_stalled", message: "connection stalled" },
+    }),
+    true,
+  );
+  assert.equal(
+    isRetryableCursorSdkRunFailure({
+      elapsedMs: 12_000,
+      lastError: "NetworkError: connection_stalled",
+    }),
+    true,
+  );
+});

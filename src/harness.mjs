@@ -1,4 +1,4 @@
-import { Agent, CursorAgentError } from "@cursor/sdk";
+import { Agent, AgentBusyError, CursorAgentError } from "@cursor/sdk";
 import { withCursorSdkConnectionGate } from "./connection-gate.mjs";
 import {
   DEFAULT_MAX_ATTEMPTS,
@@ -20,6 +20,12 @@ import {
   readCursorSdkAgentId,
   writeCursorSdkAgentId,
 } from "./session-binding.mjs";
+import {
+  CursorSdkWatchdogError,
+  raceWithIdleAndAbort,
+  raceWithRunTimeoutAndAbort,
+  resolveWatchdogConfig,
+} from "./run-watchdog.mjs";
 
 const HARNESS_ID = "cursor-sdk";
 const PROVIDER_ID = "cursor-sdk";
@@ -57,6 +63,9 @@ function resolveCwd(params, pluginConfig) {
 }
 
 function isActiveRunError(err) {
+  if (err instanceof AgentBusyError) {
+    return true;
+  }
   const message = String(err?.message ?? err ?? "");
   return message.includes("already has active run");
 }
@@ -122,7 +131,24 @@ async function openAgent(params, pluginConfig, { forceFresh = false } = {}) {
   };
 }
 
+function failureFlagsFromError(err, params) {
+  if (err instanceof CursorSdkWatchdogError) {
+    return {
+      aborted: err.aborted === true,
+      externalAbort: err.aborted === true && params.abortSignal?.aborted === true,
+      timedOut: err.timedOut === true,
+      idleTimedOut: err.idleTimedOut === true,
+    };
+  }
+  if (params.abortSignal?.aborted) {
+    return { aborted: true, externalAbort: true };
+  }
+  return {};
+}
+
 export function createCursorSdkHarness(pluginConfig = {}) {
+  const watchdog = resolveWatchdogConfig(pluginConfig);
+
   return {
     id: HARNESS_ID,
     label: "Cursor SDK",
@@ -222,6 +248,11 @@ export function createCursorSdkHarness(pluginConfig = {}) {
                 backend: HARNESS_ID,
                 ...info,
               }),
+            raceNext: (nextPromise) =>
+              raceWithIdleAndAbort(nextPromise, {
+                idleTimeoutMs: watchdog.idleTimeoutMs,
+                abortSignal: params.abortSignal,
+              }),
           });
           const waitPromise = run.wait();
           streamPromise.catch(() => {});
@@ -234,8 +265,29 @@ export function createCursorSdkHarness(pluginConfig = {}) {
               state = value;
               return value;
             });
-            [state, result] = await Promise.all([wrappedStreamPromise, waitPromise]);
+            [state, result] = await raceWithRunTimeoutAndAbort(
+              Promise.all([wrappedStreamPromise, waitPromise]),
+              {
+                runTimeoutMs: watchdog.runTimeoutMs,
+                abortSignal: params.abortSignal,
+              },
+            );
           } catch (err) {
+            const partialState = state ?? err?.cursorSdkStreamState;
+            if (err instanceof CursorSdkWatchdogError) {
+              console.warn(
+                `[cursor-sdk] ${err.message} (model=${params.modelId ?? "auto"}, session=${
+                  params.sessionId ?? "unknown"
+                })`,
+              );
+              await prepareCursorSdkRetry(params);
+              return buildFailureResult(
+                params,
+                err.message,
+                partialState,
+                failureFlagsFromError(err, params),
+              );
+            }
             if (params.abortSignal?.aborted) {
               throw err;
             }
@@ -248,15 +300,19 @@ export function createCursorSdkHarness(pluginConfig = {}) {
               err instanceof CursorAgentError
                 ? `Cursor SDK error: ${err.message}`
                 : String(err?.message ?? err);
-            return buildFailureResult(params, message, state ?? err?.cursorSdkStreamState);
+            return buildFailureResult(params, message, partialState);
           }
           if (result.status === "error") {
             const elapsedMs = Date.now() - startedAt;
+            const terminalError =
+              result.error?.message ??
+              result.error?.code ??
+              state.lastError;
             if (
               attempt < DEFAULT_MAX_ATTEMPTS &&
               isRetryableCursorSdkRunFailure({
                 elapsedMs,
-                lastError: state.lastError,
+                lastError: terminalError,
               })
             ) {
               await prepareCursorSdkRetry(params);
@@ -266,7 +322,9 @@ export function createCursorSdkHarness(pluginConfig = {}) {
             // Surface the underlying SDK reason (rate limit, unavailable, auth,
             // expired agent, etc.) instead of an opaque run id so recurring
             // failures are diagnosable from the gateway log and failover message.
-            const reason = formatCursorSdkError(state.lastError);
+            const reason =
+              formatCursorSdkError(terminalError) ||
+              (result.error?.code ? String(result.error.code) : undefined);
             const message = `Cursor SDK run failed (${result.id ?? "unknown"})${
               reason ? `: ${reason}` : ""
             }`;
@@ -300,12 +358,25 @@ export function createCursorSdkHarness(pluginConfig = {}) {
           return buildSuccessResult(params, state, agentId, resultText);
         } catch (err) {
           const partialState = err?.cursorSdkStreamState;
+          if (err instanceof CursorSdkWatchdogError) {
+            console.warn(
+              `[cursor-sdk] ${err.message} (model=${params.modelId ?? "auto"}, session=${
+                params.sessionId ?? "unknown"
+              })`,
+            );
+            await prepareCursorSdkRetry(params);
+            return buildFailureResult(
+              params,
+              err.message,
+              partialState,
+              failureFlagsFromError(err, params),
+            );
+          }
           if (params.abortSignal?.aborted) {
-            return {
-              ...buildFailureResult(params, "Cursor SDK run aborted", partialState),
+            return buildFailureResult(params, "Cursor SDK run aborted", partialState, {
               aborted: true,
               externalAbort: true,
-            };
+            });
           }
           if (attempt < DEFAULT_MAX_ATTEMPTS && isRetryableCursorSdkError(err)) {
             await prepareCursorSdkRetry(params);

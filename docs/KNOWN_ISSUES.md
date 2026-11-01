@@ -30,17 +30,37 @@
 
 If applying a local Telegram fix, track it outside the plugin repo in your own issue tracker. Re-verify after every `npm update openclaw`.
 
+## Cursor SDK: hung turns holding the connection gate
+
+**Symptom:** Telegram / cron sessions sit in `processing` with `active_work_without_progress` for many minutes; other `cursor-sdk` turns feel stuck or time out in the OpenClaw lane (often ~330s cron / ~20m main). Gateway may show many ESTABLISHED HTTPS connections to Cursor/AWS and elevated RSS. Logs can include `Plugin cursor-sdk forced retirement after 5000ms: N still-running call(s)`.
+
+**Root cause:** A single Cursor SDK stream/`run.wait()` that stops emitting events never observes OpenClaw’s `abortSignal` until the SDK itself rejects. Because turns are serialized by `connection-gate.mjs`, that hung turn blocks every other SDK session until the outer command-lane timeout finally fires.
+
+**Plugin mitigations (2026-10-31):**
+- Idle watchdog: abort when the event stream makes no progress for `idleTimeoutMs` (default **180s**)
+- Hard run watchdog: abort after `runTimeoutMs` (default **600s**)
+- Both races also honor `abortSignal` so OpenClaw aborts release the gate promptly
+- On watchdog fire: clear the session→agent binding so the next turn uses `Agent.create` instead of resuming a wedged cloud agent
+
+Configure under `plugins.entries.cursor-sdk.config` in `openclaw.json`. Restart the gateway after changing the plugin.
+
+**Operator recovery:**
+1. `openclaw gateway call chat.abort --params '{"sessionKey":"..."}'` (no-op if already idle)
+2. Delete `~/.openclaw/state/cursor-sdk/<sessionId>.json` for hung sessions (or `node scripts/cleanup-sessions.mjs --apply`)
+3. `openclaw gateway restart` to drop zombie HTTPS connections and reclaim RSS
+
 ## Cursor SDK: HTTP/2 transport failures (`NGHTTP2_ENHANCE_YOUR_CALM`)
 
 **Symptom:** Telegram (or other channels) show `Agent failed before reply: Cursor SDK run failed (run-…)` after ~1–3 seconds. Gateway logs may include `ConnectError: Stream closed with error code NGHTTP2_ENHANCE_YOUR_CALM`, `write ECANCELED`, or `NGHTTP2_INTERNAL_ERROR`.
 
 **Root cause:** The local `@cursor/sdk` runtime opens HTTP/2 streams to Cursor's API. Too many concurrent lifecycles (multiple sessions, resume bindings, rapid retries, stale local `agent` CLI processes) trigger server-side rate limiting. Retries that reconnect immediately make this worse.
 
-**Plugin mitigations (2026-06-03):**
+**Plugin mitigations (2026-06-03 + 2026-10-31):**
 - Serialize SDK turns per gateway process (`connection-gate.mjs`)
 - On transport failure: clear session binding and `Agent.create` fresh instead of `Agent.resume`
 - Longer exponential backoff (2s base, 5 attempts) before retry
 - Connect-guard suppresses benign background transport rejections so the gateway does not crash-loop
+- `@cursor/sdk` **1.2.0** includes idle HTTP/2 close + `connection_stalled` retries; plugin treats that code as retryable and maps `AgentBusyError` / `RunResult.error` for clearer failover
 
 **OpenClaw failover caveat:** When a session has an explicit model override (Control UI → `cursor-sdk/…`), OpenClaw sets `fallbackConfigured: false` and will **not** auto-failover to `cursor-cli`. Clear the session override or switch model back to defaults to allow fallback.
 

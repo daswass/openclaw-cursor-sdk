@@ -25,7 +25,7 @@ function classifyTerminalOutcome(params) {
   return "empty";
 }
 
-export function buildFailureResult(params, message, partialState = undefined) {
+export function buildFailureResult(params, message, partialState = undefined, flags = {}) {
   const hadPotentialSideEffects = partialState?.hadPotentialSideEffects === true;
   const itemLifecycle = partialState?.itemLifecycle
     ? { ...partialState.itemLifecycle }
@@ -35,10 +35,10 @@ export function buildFailureResult(params, message, partialState = undefined) {
         activeCount: 0,
       };
   return {
-    aborted: false,
-    externalAbort: false,
-    timedOut: false,
-    idleTimedOut: false,
+    aborted: flags.aborted === true,
+    externalAbort: flags.externalAbort === true,
+    timedOut: flags.timedOut === true,
+    idleTimedOut: flags.idleTimedOut === true,
     timedOutDuringCompaction: false,
     timedOutDuringToolExecution: false,
     promptError: message,

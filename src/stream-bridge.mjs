@@ -362,9 +362,28 @@ export function resolveStreamedFinalText(state) {
 
 export async function drainSdkStream(stream, callbacks) {
   const state = createStreamState();
+  // Prefer an explicit iterator so we can race each next() against idle/abort
+  // watchdogs. A plain `for await` ignores OpenClaw abortSignal until the SDK
+  // itself yields or rejects — which is exactly how hung turns wedge the gate.
+  const iterator = stream?.[Symbol.asyncIterator]?.() ?? null;
+  const raceNext =
+    typeof callbacks.raceNext === "function"
+      ? callbacks.raceNext
+      : async (nextPromise) => nextPromise;
+
   try {
-    for await (const event of stream) {
-      await bridgeSdkStreamEvent(event, state, callbacks);
+    if (!iterator) {
+      for await (const event of stream) {
+        await bridgeSdkStreamEvent(event, state, callbacks);
+      }
+    } else {
+      while (true) {
+        const step = await raceNext(Promise.resolve(iterator.next()));
+        if (step.done) {
+          break;
+        }
+        await bridgeSdkStreamEvent(step.value, state, callbacks);
+      }
     }
   } catch (err) {
     state.lastError = err;

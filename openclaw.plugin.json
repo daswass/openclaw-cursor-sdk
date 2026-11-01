@@ -48,6 +48,14 @@
       "streamThinkingToChannels": {
         "type": "boolean",
         "description": "When true, forward SDK thinking events to onReasoningStream (Telegram reasoning drafts). Default false for Codex-like tool-only progress UX."
+      },
+      "idleTimeoutMs": {
+        "type": "number",
+        "description": "Abort a Cursor SDK turn when the event stream makes no progress for this many milliseconds (default: 180000). Releases the connection gate so other sessions are not blocked."
+      },
+      "runTimeoutMs": {
+        "type": "number",
+        "description": "Hard wall-clock timeout for a single Cursor SDK turn in milliseconds (default: 600000)."
       }
     }
   }

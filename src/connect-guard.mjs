@@ -26,6 +26,9 @@ const BENIGN_CONNECT_MARKERS = [
   "ECANCELED",
   "ERR_STREAM_WRITE_AFTER_END",
   "Stream closed with error code",
+  // @cursor/sdk >= 1.0.34 closes idle HTTP/2 connections and may surface this
+  // retryable NetworkError code when a quiet connection was already gone.
+  "connection_stalled",
 ];
 
 function* errorGraph(reason, depth = 0) {

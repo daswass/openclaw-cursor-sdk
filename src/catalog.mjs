@@ -29,7 +29,9 @@ function mapSdkModel(model) {
   if (!id) {
     return null;
   }
-  const name = String(model?.name ?? id).trim() || id;
+  // SDKModel / ModelListItem uses displayName; keep name as a fallback for
+  // static DEFAULT_MODELS and older SDK shapes.
+  const name = String(model?.displayName ?? model?.name ?? id).trim() || id;
   const reasoning =
     id.includes("thinking") ||
     id.includes("opus") ||

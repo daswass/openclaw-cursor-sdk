@@ -29,6 +29,19 @@ export function isRetryableCursorSdkRunFailure({ elapsedMs, lastError }) {
     if (isBenignCursorConnectTransportError({ message: lastError })) {
       return true;
     }
+    if (lastError.includes("connection_stalled")) {
+      return true;
+    }
+  }
+  if (lastError && typeof lastError === "object") {
+    const code = String(lastError.code ?? "");
+    const message = String(lastError.message ?? "");
+    if (code === "connection_stalled" || message.includes("connection_stalled")) {
+      return true;
+    }
+    if (isBenignCursorConnectTransportError(lastError)) {
+      return true;
+    }
   }
   return typeof elapsedMs === "number" && elapsedMs >= 0 && elapsedMs < FAST_FAILURE_RETRY_MS;
 }

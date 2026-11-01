@@ -26,10 +26,11 @@ function parseArgs(argv) {
   const apply = argv.includes("--apply");
   const pruneArtifacts = argv.includes("--prune-openclaw-artifacts");
   const json = argv.includes("--json");
+  const allowEmptyStoreOrphans = argv.includes("--allow-empty-store-orphans");
   const bindingDays = readDaysFlag(argv, "--binding-retention-days", DEFAULT_BINDING_RETENTION_DAYS);
   const deletedDays = readDaysFlag(argv, "--deleted-artifact-days", DEFAULT_DELETED_ARTIFACT_DAYS);
   const artifactDays = readDaysFlag(argv, "--artifact-retention-days", DEFAULT_ARTIFACT_RETENTION_DAYS);
-  return { apply, pruneArtifacts, json, bindingDays, deletedDays, artifactDays };
+  return { apply, pruneArtifacts, json, allowEmptyStoreOrphans, bindingDays, deletedDays, artifactDays };
 }
 
 function readDaysFlag(argv, flag, fallback) {
@@ -75,20 +76,26 @@ async function loadSessionsStore() {
   }
 }
 
-async function planBindingCleanup({ bySessionId, bindingDays }) {
+async function planBindingCleanup({ bySessionId, bindingDays, allowEmptyStoreOrphans }) {
   const cutoffMs = daysAgoMs(bindingDays);
   const planned = [];
   let bytes = 0;
+  let skippedEmptyStoreOrphans = 0;
 
   let names;
   try {
     names = await readdir(BINDINGS_DIR);
   } catch (err) {
     if (err && typeof err === "object" && err.code === "ENOENT") {
-      return { planned, bytes };
+      return { planned, bytes, skippedEmptyStoreOrphans };
     }
     throw err;
   }
+
+  // OpenClaw 2026.x often keeps live sessions in sqlite, not agents/*/sessions/sessions.json.
+  // An empty JSON store must not delete every binding as an "orphan".
+  const storeLooksEmpty = bySessionId.size === 0;
+  const skipOrphanDeletes = storeLooksEmpty && !allowEmptyStoreOrphans;
 
   for (const name of names) {
     if (!name.endsWith(".json")) {
@@ -99,6 +106,10 @@ async function planBindingCleanup({ bySessionId, bindingDays }) {
     const entry = bySessionId.get(sessionId);
     let reason;
     if (!entry) {
+      if (skipOrphanDeletes) {
+        skippedEmptyStoreOrphans += 1;
+        continue;
+      }
       reason = "orphan (session not in sessions.json)";
     } else {
       const lastMs = resolveLastInteractionMs(entry);
@@ -117,7 +128,7 @@ async function planBindingCleanup({ bySessionId, bindingDays }) {
     planned.push({ filePath, sessionId, reason, bytes: fileStat.size });
   }
 
-  return { planned, bytes };
+  return { planned, bytes, skippedEmptyStoreOrphans };
 }
 
 function resolveLastInteractionMs(entry) {
@@ -243,6 +254,7 @@ async function main() {
   const bindingPlan = await planBindingCleanup({
     bySessionId: store.bySessionId,
     bindingDays: args.bindingDays,
+    allowEmptyStoreOrphans: args.allowEmptyStoreOrphans,
   });
 
   let artifactPlan = { planned: [], bytes: 0 };
@@ -266,6 +278,7 @@ async function main() {
       dir: BINDINGS_DIR,
       candidates: bindingPlan.planned.length,
       bytes: bindingPlan.bytes,
+      skippedEmptyStoreOrphans: bindingPlan.skippedEmptyStoreOrphans ?? 0,
     },
     artifacts: args.pruneArtifacts
       ? {
@@ -289,6 +302,11 @@ async function main() {
   console.log(
     `  Binding orphans/stale: ${report.bindings.candidates} (${formatBytes(report.bindings.bytes)})`,
   );
+  if (report.bindings.skippedEmptyStoreOrphans > 0) {
+    console.log(
+      `  Skipped ${report.bindings.skippedEmptyStoreOrphans} orphan candidate(s): sessions.json is empty (likely sqlite-backed). Pass --allow-empty-store-orphans to delete them anyway.`,
+    );
+  }
   if (args.pruneArtifacts) {
     console.log(
       `  OpenClaw artifact prune: ${report.artifacts.candidates} (${formatBytes(report.artifacts.bytes)})`,
